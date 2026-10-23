@@ -34,7 +34,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     procps \
     bash \
-    chromium \
     fonts-liberation \
     fonts-dejavu-core \
     fonts-noto-cjk \
@@ -64,6 +63,33 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && printf '%s\n' '#!/bin/sh' 'exec xsetroot -solid "#111113" "$@"' > /usr/bin/fbsetbg \
   && chmod +x /usr/bin/fbsetbg \
   && ln -sfn /bin/true /usr/bin/xmessage
+# The bot browser. Chromium by default; BROWSER=brave installs Brave from its
+# apt repository instead. rakazo-browser launches whichever is installed.
+ARG BROWSER=chromium
+RUN set -eux; \
+    case "$BROWSER" in \
+      chromium) \
+        apt-get update; \
+        apt-get install -y --no-install-recommends chromium ;; \
+      brave) \
+        keyring=/usr/share/keyrings/brave-browser-archive-keyring.gpg; \
+        curl -fsSLo "$keyring" https://brave-browser-apt-release.s3.brave.com/brave-browser-archive-keyring.gpg; \
+        echo "deb [signed-by=$keyring arch=$(dpkg --print-architecture)] https://brave-browser-apt-release.s3.brave.com/ stable main" \
+          > /etc/apt/sources.list.d/brave-browser-release.list; \
+        apt-get update; \
+        apt-get install -y --no-install-recommends brave-browser; \
+        mkdir -p /etc/brave/policies/managed; \
+        printf '%s\n' '{' \
+          '  "BraveRewardsDisabled": true,' \
+          '  "BraveWalletDisabled": true,' \
+          '  "BraveAIChatEnabled": false,' \
+          '  "BraveVPNDisabled": true,' \
+          '  "BraveNewsDisabled": true,' \
+          '  "BraveTalkDisabled": true' \
+          '}' > /etc/brave/policies/managed/rakazo.json ;; \
+      *) echo "unsupported BROWSER: $BROWSER (use chromium or brave)" >&2; exit 1 ;; \
+    esac; \
+    rm -rf /var/lib/apt/lists/*
 RUN ln -s "$(dpkg -L libnss-wrapper | grep '/libnss_wrapper.so$')" /usr/local/lib/libnss_wrapper.so
 ARG TARGETARCH
 ARG UV_VERSION=0.12.19
